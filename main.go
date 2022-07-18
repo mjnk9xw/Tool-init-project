@@ -100,32 +100,31 @@ func checkType() {
 	case string(params.APIMux):
 	}
 
-	pathRouters := filepath.Join(cfg.Path, "api", "routers", "routers.go")
-	fmt.Println("============", pathRouters)
-	code := readFile(pathRouters)
+	writeFileRouter([]string{
+		`"{{FRAMEWORK_API_NEW}}"`,
+		`"{{FRAMEWORK_API_RUN}}"`,
+		`{{FRAMEWORK_API_LINK}}`,
+		`{{PROJECT_NAME}}`,
+	}, []string{
+		FRAMEWORK_API_NEW,
+		FRAMEWORK_API_RUN,
+		FRAMEWORK_API_LINK,
+		cfg.ProjectName,
+	})
 
-	code = strings.Replace(code, `"{{FRAMEWORK_API_NEW}}"`, FRAMEWORK_API_NEW, -1)
-	code = strings.Replace(code, `"{{FRAMEWORK_API_RUN}}"`, FRAMEWORK_API_RUN, -1)
-	code = strings.Replace(code, `{{FRAMEWORK_API_LINK}}`, FRAMEWORK_API_LINK, -1)
-	code = strings.Replace(code, `{{PROJECT_NAME}}`, cfg.ProjectName, -1)
+	writeFileControllerIndex([]string{
+		`{{PACKAGE_FRAMEWORK_API}}`,
+		`{{PACKAGE_FRAMEWORK_ENGINE}}`,
+		`{{FRAMEWORK_API_LINK}}`,
+		`{{PROJECT_NAME}}`,
+	}, []string{
+		PACKAGE_FRAMEWORK_API,
+		PACKAGE_FRAMEWORK_ENGINE,
+		FRAMEWORK_API_LINK,
+		cfg.ProjectName,
+	})
 
-	writeFile(pathRouters, code)
-
-	pathControllers := filepath.Join(cfg.Path, "api", "controllers", "index.go")
-	code = readFile(pathControllers)
-
-	code = strings.Replace(code, `{{PACKAGE_FRAMEWORK_API}}`, PACKAGE_FRAMEWORK_API, -1)
-	code = strings.Replace(code, `{{PACKAGE_FRAMEWORK_ENGINE}}`, PACKAGE_FRAMEWORK_ENGINE, -1)
-	code = strings.Replace(code, `{{FRAMEWORK_API_LINK}}`, FRAMEWORK_API_LINK, -1)
-	code = strings.Replace(code, `{{PROJECT_NAME}}`, cfg.ProjectName, -1)
-
-	writeFile(pathControllers, code)
-
-	pathAPIMain := filepath.Join(cfg.Path, "cmd", "api", "main.go")
-	code = readFile(pathAPIMain)
-	code = strings.Replace(code, `{{PROJECT_NAME}}`, cfg.ProjectName, -1)
-
-	writeFile(pathAPIMain, code)
+	writeFileMain([]string{`{{PROJECT_NAME}}`}, []string{cfg.ProjectName})
 
 }
 
@@ -156,6 +155,9 @@ func checkConfig() {
 }
 
 func checkEntities() {
+	codeRepoReplace := ""
+	codeSetRepoReplace := ""
+	codeSetRepoMainReplace := ""
 
 	// entities + repository interface + body request
 	entities := strings.Split(cfg.Entities, ",")
@@ -164,18 +166,65 @@ func checkEntities() {
 		// model
 		makeFileWrite(filepath.Join(cfg.Path, "entities", strings.ToLower(v)+".go"),
 			fmt.Sprintf(`package entities
-type %s struct {}`, v))
+type %s struct {}
+
+func (e *%s) TableName() string {
+	return "%s"
+}
+`, v, v, strings.ToLower(v)))
 
 		// repository
 		makeFileWrite(filepath.Join(cfg.Path, "repository", strings.ToLower(v)+".go"),
 			fmt.Sprintf(`package repository
-import "%s/entities"
+import (
+	"context"
+	"fmt"
+	"%s/entities"
+	"testgaugau/pkg/mongodb"
+
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
 type %s interface{ 
 	Creat(e *entities.%s) (*entities.%s, error)
 	Update(id int64,e *entities.%s) (*entities.%s, error)
 	Get(id int64) (*entities.%s, error)
-	Delete(id int64) (error)
-}`, cfg.ProjectName, v, v, v, v, v, v))
+	Delete(id int64) error
+}
+
+type %sImpl struct {
+	collection *mongo.Collection
+	context    context.Context
+}
+
+func Init%sRepository(db *mongodb.DB) %sImpl {
+	e := entities.%s{}
+	if err := db.EnsureIndex(db.Context, db.Database.Collection(e.TableName()), []string{"_id"}, options.Index()); err != nil {
+		fmt.Println("there is an error when create index: id for table ", err)
+	}
+
+	return %sImpl{
+		collection: db.Database.Collection(e.TableName()),
+		context:    db.Context,
+	}
+}
+
+func (s %sImpl) Creat(e *entities.%s) (*entities.%s, error) {
+	return nil, nil
+}
+
+func (s %sImpl) Update(id int64,e *entities.%s) (*entities.%s, error) {
+	return nil, nil
+}
+
+func (s %sImpl) Get(id int64) (*entities.%s, error) {
+	return nil, nil
+}
+
+func (s %sImpl) Delete(id int64) error {
+	return nil
+}
+`, cfg.ProjectName, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v, v))
 
 		// body
 		makeFileWrite(filepath.Join(cfg.Path, "api", "requests", strings.ToLower(v)+".go"),
@@ -188,16 +237,53 @@ type %sReq struct{
 			fmt.Sprintf(`package responses
 type %sRes struct{ 
 }`, v))
+
+		codeRepoReplace += fmt.Sprintf(`%sRepo repository.%s
+`, v, v)
+		codeSetRepoReplace += fmt.Sprintf(`
+func (s *Service) Set%sRepo(repo repository.%s) *Service {
+s.%sRepo = repo
+return s
+}
+`, v, v, v)
+
+		codeSetRepoMainReplace += fmt.Sprintf(`.
+		Set%sRepo(repository.Init%sRepository(mongodbHandler))`, v, v)
+
 	}
+
+	writeFileServiceGo([]string{
+		`{{REPO_SERVICE}}`,
+		`{{SET_REPO_SERVICE}}`},
+		[]string{
+			codeRepoReplace,
+			codeSetRepoReplace})
+
+	writeFileMain([]string{`{{SET_REPO_SERVICE}}`}, []string{codeSetRepoMainReplace})
 
 }
 
 func checkUsecases() {
+
 	usecases := strings.Split(cfg.Usecase, ",")
+	codeReplace := ""
+
 	for _, v := range usecases {
 		makeFileWrite(filepath.Join(cfg.Path, "services", "usecases_"+v+".go"),
-			fmt.Sprintf("package services\ntype %s struct { \n}", v))
+			fmt.Sprintf(`package services
+func (s Service) Usecase%s() {}`,
+				v))
+
+		codeReplace += fmt.Sprintf(`Usecase%s()
+	`, v)
 	}
+
+	writeFileServiceGo([]string{
+		`{{I_USECASE}}`,
+		`{{PROJECT_NAME}}`},
+		[]string{
+			codeReplace,
+			cfg.ProjectName})
 }
 
 func runCommand(command, folder string, arg ...string) {
@@ -255,4 +341,48 @@ func readFile(file string) string {
 
 	return string(f)
 
+}
+
+func writeFileMain(key, value []string) {
+	pathAPIMain := filepath.Join(cfg.Path, "cmd", "api", "main.go")
+	code := readFile(pathAPIMain)
+
+	for i := range key {
+		code = strings.Replace(code, key[i], value[i], -1)
+	}
+
+	writeFile(pathAPIMain, code)
+}
+
+func writeFileRouter(key, value []string) {
+	pathRouters := filepath.Join(cfg.Path, "api", "routers", "routers.go")
+	code := readFile(pathRouters)
+
+	for i := range key {
+		code = strings.Replace(code, key[i], value[i], -1)
+	}
+
+	writeFile(pathRouters, code)
+}
+
+func writeFileServiceGo(key, value []string) {
+	pathRouters := filepath.Join(cfg.Path, "services", "service.go")
+	code := readFile(pathRouters)
+
+	for i := range key {
+		code = strings.Replace(code, key[i], value[i], -1)
+	}
+
+	writeFile(pathRouters, code)
+}
+
+func writeFileControllerIndex(key, value []string) {
+	pathRouters := filepath.Join(cfg.Path, "api", "controllers", "index.go")
+	code := readFile(pathRouters)
+
+	for i := range key {
+		code = strings.Replace(code, key[i], value[i], -1)
+	}
+
+	writeFile(pathRouters, code)
 }
