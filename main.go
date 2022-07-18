@@ -5,9 +5,11 @@ import (
 	"GauGau/params"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/otiai10/copy"
@@ -51,9 +53,15 @@ func Load() {
 	checkEntities()
 	checkUsecases()
 
-	exec.Command("cmd.exe", "/c", "cd", cfg.Path,
-		"/c", "go mod init", cfg.ProjectName,
-		"/c", "go mod tidy")
+	os.Chdir(cfg.Path)
+	if runtime.GOOS == "windows" {
+		exec.Command("cmd.exe", "/c", "go mod init", cfg.ProjectName).Output()
+		exec.Command("cmd.exe", "/c", "go mod tidy").Output()
+	} else {
+		exec.Command("go mod init", cfg.ProjectName).Output()
+		exec.Command("go mod tidy").Output()
+	}
+
 }
 
 func checkModel() {
@@ -72,11 +80,53 @@ func checkModel() {
 }
 
 func checkType() {
+
+	FRAMEWORK_API_LINK := `"github.com/gin-gonic/gin"`
+	PACKAGE_FRAMEWORK_API := "gin"
+	PACKAGE_FRAMEWORK_ENGINE := "Engine"
+	FRAMEWORK_API_NEW := "g := gin.Default()"
+	FRAMEWORK_API_RUN := "g.Run()"
 	switch cfg.Type {
 	case string(params.APIGIN):
+		PACKAGE_FRAMEWORK_API = "gin"
+		PACKAGE_FRAMEWORK_ENGINE = "Engine"
+		FRAMEWORK_API_LINK = `"github.com/gin-gonic/gin"`
 	case string(params.APIEcho):
+		FRAMEWORK_API_LINK = `"github.com/labstack/echo/v4"`
+		PACKAGE_FRAMEWORK_API = "echo"
+		PACKAGE_FRAMEWORK_ENGINE = "Echo"
+		FRAMEWORK_API_NEW = "g := echo.New()"
+		FRAMEWORK_API_RUN = "g.Start()"
 	case string(params.APIMux):
 	}
+
+	pathRouters := filepath.Join(cfg.Path, "api", "routers", "routers.go")
+	fmt.Println("============", pathRouters)
+	code := readFile(pathRouters)
+
+	code = strings.Replace(code, `"{{FRAMEWORK_API_NEW}}"`, FRAMEWORK_API_NEW, -1)
+	code = strings.Replace(code, `"{{FRAMEWORK_API_RUN}}"`, FRAMEWORK_API_RUN, -1)
+	code = strings.Replace(code, `{{FRAMEWORK_API_LINK}}`, FRAMEWORK_API_LINK, -1)
+	code = strings.Replace(code, `{{PROJECT_NAME}}`, cfg.ProjectName, -1)
+
+	writeFile(pathRouters, code)
+
+	pathControllers := filepath.Join(cfg.Path, "api", "controllers", "index.go")
+	code = readFile(pathControllers)
+
+	code = strings.Replace(code, `{{PACKAGE_FRAMEWORK_API}}`, PACKAGE_FRAMEWORK_API, -1)
+	code = strings.Replace(code, `{{PACKAGE_FRAMEWORK_ENGINE}}`, PACKAGE_FRAMEWORK_ENGINE, -1)
+	code = strings.Replace(code, `{{FRAMEWORK_API_LINK}}`, FRAMEWORK_API_LINK, -1)
+	code = strings.Replace(code, `{{PROJECT_NAME}}`, cfg.ProjectName, -1)
+
+	writeFile(pathControllers, code)
+
+	pathAPIMain := filepath.Join(cfg.Path, "cmd", "api", "main.go")
+	code = readFile(pathAPIMain)
+	code = strings.Replace(code, `{{PROJECT_NAME}}`, cfg.ProjectName, -1)
+
+	writeFile(pathAPIMain, code)
+
 }
 
 func checkDB() {
@@ -95,12 +145,10 @@ func checkConfig() {
 	}
 
 	pathConfig := filepath.Join(cfg.Path, "configs", "config.go")
-	fmt.Println(pathConfig)
 	code := readFile(pathConfig)
-	strings.Replace(code, "{{CONFIG_TYPE}}", cfgs[1], -1)
-	strings.Replace(code, "{{CONFIG_NAME}}", cfgs[0], -1)
 
-	fmt.Println(code)
+	code = strings.Replace(code, "{{CONFIG_TYPE}}", cfgs[1], -1)
+	code = strings.Replace(code, "{{CONFIG_NAME}}", cfgs[0], -1)
 
 	writeFile(pathConfig, code)
 
@@ -180,49 +228,31 @@ func makeFile(file string) {
 }
 
 func makeFileWrite(file, content string) {
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		f, err := os.Create(file)
-		if err != nil {
-			panic(err)
-		}
 
-		defer f.Close()
-
-		_, err = f.WriteString(content)
-		if err != nil {
-			panic(err)
-		}
+	f, err := os.Create(file)
+	if err != nil {
+		panic(err)
 	}
+
+	defer f.Close()
+
+	_, err = f.WriteString(content)
+	if err != nil {
+		panic(err)
+	}
+
 }
 
 func writeFile(file, content string) {
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		f, err := os.Open(file)
-		if err != nil {
-			panic(err)
-		}
 
-		defer f.Close()
+	ioutil.WriteFile(file, []byte(content), 0644)
 
-		_, err = f.WriteString(content)
-		if err != nil {
-			panic(err)
-		}
-	}
 }
 
 func readFile(file string) string {
-	if _, err := os.Stat(file); os.IsNotExist(err) {
-		f, err := os.ReadFile(file)
-		if err != nil {
-			panic(err)
-		}
 
-		return string(f)
-	}
-	return ""
-}
+	f, _ := ioutil.ReadFile(file)
 
-func copyFolder(old string, new string) {
-	// runCommand(fmt.Sprintf("cp -r %s %s", old, new))
+	return string(f)
+
 }

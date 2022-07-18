@@ -1,9 +1,9 @@
 package main
 
 import (
-	"GauGau/agen/clean-code/api/routers"
-	"GauGau/agen/clean-code/configs"
-	"GauGau/agen/clean-code/services"
+	"{{PROJECT_NAME}}/api/routers"
+	"{{PROJECT_NAME}}/configs"
+	"{{PROJECT_NAME}}/services"
 	"log"
 )
 
@@ -15,7 +15,7 @@ func main() {
 
 	s := services.New()
 
-	routers.NewGin(s)
+	routers.New(s)
 
 	log.Println("end....")
 }
