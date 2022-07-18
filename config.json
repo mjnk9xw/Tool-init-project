@@ -1,0 +1,12 @@
+{
+    "path": "C:\\Users\\Admin\\go\\src\\testgaugau",
+    "project_name": "testgaugau",
+    "type": "api-gin",
+    "model": "clean-code",
+    "config": "config.json",
+    "db": "redis,mongo",
+    "entities": "User,Class,Student",
+    "usecase":  "user_read,user_write,class_read",
+    "docker-file": true,
+    "docker-compose": true
+}
