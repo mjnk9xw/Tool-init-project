@@ -6,6 +6,14 @@ import (
 	{{FRAMEWORK_API_LINK}}
 )
 
-func NewControllers(g *{{PACKAGE_FRAMEWORK_API}}.{{PACKAGE_FRAMEWORK_ENGINE}}, s services.IService) {
-	
+type Controller struct {
+	g *{{PACKAGE_FRAMEWORK_API}}.{{PACKAGE_FRAMEWORK_ENGINE}}
+	s services.IService
+}
+
+func NewControllers(g *{{PACKAGE_FRAMEWORK_API}}.{{PACKAGE_FRAMEWORK_ENGINE}}, s services.IService)  *Controller {
+	return &Controller{
+		g: g,
+		s: s,
+	}
 }

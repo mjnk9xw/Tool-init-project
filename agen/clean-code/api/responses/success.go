@@ -1,3 +1,6 @@
 package responses
 
-type SuccessRes struct{}
+type SuccessRes struct {
+	Data interface{} `json:"data"`
+	ErrorRes
+}

@@ -7,14 +7,19 @@ import (
 	{{FRAMEWORK_API_LINK}}
 )
 
-type Router struct {
-}
-
 func New(s services.IService) {
 	"{{FRAMEWORK_API_NEW}}"
 
-	controllers.NewControllers(g, s)
+	con := controllers.NewControllers(g, s)
+
+	loadRouter(g, con)
 
 	"{{FRAMEWORK_API_RUN}}"
 
+}
+func loadRouter(g *{{PACKAGE_FRAMEWORK_API}}.{{PACKAGE_FRAMEWORK_ENGINE}}, con *controllers.Controller) {
+	api := g.Group("/api")
+	{
+		{{GROUP_API_CONTROLLER}}
+	}
 }

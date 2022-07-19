@@ -4,7 +4,9 @@ import (
 	"{{PROJECT_NAME}}/api/routers"
 	"{{PROJECT_NAME}}/configs"
 	"{{PROJECT_NAME}}/services"
-	"{{PROJECT_NAME}}/pkg/mongodb"
+	{{MONGO_PKG}}
+	{{REDIS_PKG}}
+	{{LOG_PKG}}
 	"{{PROJECT_NAME}}/repository"
 	"log"
 	"fmt"
@@ -16,14 +18,14 @@ func main() {
 	cfg := configs.LoadConfig()
 	log.Println("demo config = ", cfg.Demo)
 
-
-	mongodbHandler, err := mongodb.Init(mongodb.Config{})
-	if err != nil {
-		fmt.Printf("cannot connect to mongodb - error: [%s]", err)
-	}
+	logger := logger.New()
+	defer logger.Sync()
+	
+	{{MONGO_HANDLER}}
+	{{REDIS_HANDLER}}
 
 	s := services.
-	New(){{SET_REPO_SERVICE}}.Build()
+	New().SetLog(logger){{SET_REPO_SERVICE}}{{SET_REDIS_SERVICE}}.Build()
 
 	routers.New(s)
 
